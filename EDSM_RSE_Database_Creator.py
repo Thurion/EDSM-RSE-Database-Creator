@@ -22,20 +22,40 @@ import urllib.request
 import json
 import sqlite3
 import time
+import re
 
 LENGTH_OF_DAY = 86400
 
 def main():
-    file =  os.path.join(os.getcwd(), "systemsWithoutCoordinates.json")
+    jsonFile =  os.path.join(os.getcwd(), "systemsWithoutCoordinates.json")
     dbFile = os.path.join(os.getcwd(), "systemsWithoutCoordinates.sqlite")
+    permitSectorsFile = os.path.join(os.getcwd(), "permit_sectors.txt")
 
     # delete the json file if it's older than 1 day
-    if os.path.exists(file) and (time.time() - os.path.getctime(file)) > LENGTH_OF_DAY:
-        os.remove(file)
-    if not os.path.exists(file):
+    if os.path.exists(jsonFile) and (time.time() - os.path.getctime(jsonFile)) > LENGTH_OF_DAY:
+        print("json is older than 1 day. It will be removed.")
+        os.remove(jsonFile)
+    if not os.path.exists(jsonFile):
+        print("Downloading systemsWithoutCoordinates.json from EDSM.")
         r = urllib.request.urlopen("https://www.edsm.net/dump/systemsWithoutCoordinates.json")
-        with open(file, 'b+w') as f:
+        with open(jsonFile, 'b+w') as f:
             f.write(r.read())
+
+    permitSectorsList = list()
+    if os.path.exists(permitSectorsFile):
+        with open(permitSectorsFile) as file:
+            for line in file:
+                permitSectorsList.append(line.rstrip())
+    permitLocked = re.compile("^({0})".format("|".join(permitSectorsList)), re.IGNORECASE)
+
+    systemNames = list()
+    useRegex = True if len(permitSectorsList) > 0 else False
+    with open(jsonFile) as file:
+        j = json.load(file)
+        for entry in j:
+            if useRegex and permitLocked.match(entry["name"]):
+                continue # ignore
+            systemNames.append(entry["name"])
 
 
 
