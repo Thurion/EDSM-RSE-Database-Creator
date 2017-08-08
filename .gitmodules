@@ -1,0 +1,4 @@
+[submodule "edts"]
+	path = edts
+	url = https://bitbucket.org/Esvandiary/edts.git
+	branch = 78654b327f0aabd5c35c668ca9e81dfbc2ffcd72
