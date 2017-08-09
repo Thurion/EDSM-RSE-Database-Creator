@@ -400,3 +400,4 @@ paket-files/
 *.db
 *.db-journal
 *.sqlite
+version.txt

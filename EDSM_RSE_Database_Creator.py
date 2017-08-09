@@ -23,9 +23,20 @@ import json
 import sqlite3
 import time
 import re
+import multiprocessing as mp
+from tqdm import tqdm
 from edts.edtslib import system as edtsSystem
 
 LENGTH_OF_DAY = 86400
+NUMBER_OF_PROCESSES = 6
+
+def coordinatesFromName(name):
+    s = edtsSystem.from_name(name, allow_known=False)
+    if s:
+        return (s.name, s.position.x, s.position.y, s.position.z)
+    else:
+        return None
+
 
 def main():
     jsonFile =  os.path.join(os.getcwd(), "systemsWithoutCoordinates.json")
@@ -82,26 +93,24 @@ def main():
     t = int(time.time())
     c.execute("INSERT INTO version (date) VALUES (?)", (t,)) # we need a tuple here, create one with only 1 entry
 
-    numberOfSystems = len(systemNames)
-    currentProgress = 0
-    print("Calculating the coordinates and filling the database...")
-    print("00 % complete")
-    for i, name in enumerate(systemNames):
-        newProgess = int((i / numberOfSystems) * 100)
-        if newProgess > currentProgress:
-            currentProgress = newProgess
-            print("{0:02d} % complete".format(currentProgress))
-        s = edtsSystem.from_name(name, allow_known=False) # EDTS needs an update for this to work
-        if s:
-            c.execute("INSERT INTO systems (name, x, y, z) VALUES (?,?,?,?)", (s.name, s.position.x, s.position.y, s.position.z))
+    print("Calculating the coordinates...")
+    pool = mp.Pool(processes = NUMBER_OF_PROCESSES)
+
+    for result in tqdm(pool.imap_unordered(coordinatesFromName, systemNames, chunksize=100), total=len(systemNames), unit="systems"):
+        if result:
+            c.execute("INSERT INTO systems (name, x, y, z) VALUES (?,?,?,?)", result)
+
+    print("Writing the database...")
     conn.commit()
 
     # write version text file
+    print("Writing the version file...")
     if os.path.exists(versionFile):
         os.remove(versionFile)
     with open(versionFile, "w") as file:
         file.write(str(t))
-
+    
+        print("All done :)")
 
 if __name__ == "__main__":
     main()
