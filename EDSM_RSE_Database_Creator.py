@@ -23,6 +23,7 @@ import json
 import sqlite3
 import time
 import re
+from edts.edtslib import system as edtsSystem
 
 LENGTH_OF_DAY = 86400
 
@@ -45,9 +46,10 @@ def main():
     if os.path.exists(permitSectorsFile):
         with open(permitSectorsFile) as file:
             for line in file:
-                permitSectorsList.append(line.rstrip())
+                permitSectorsList.append(line.strip())
     permitLocked = re.compile("^({0})".format("|".join(permitSectorsList)), re.IGNORECASE)
 
+    print("Reading json file...")
     systemNames = list()
     useRegex = True if len(permitSectorsList) > 0 else False
     with open(jsonFile) as file:
@@ -57,6 +59,43 @@ def main():
                 continue # ignore
             systemNames.append(entry["name"])
 
+    if os.path.exists(dbFile):
+        os.remove(dbFile)
+
+    conn = sqlite3.connect(dbFile)
+    conn.text_factory = str
+    c = conn.cursor()
+
+    c.execute("""CREATE TABLE 'systems' (
+	        'id'	                        INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
+	        'name'                  	    TEXT NOT NULL,
+            'x'                     	    REAL NOT NULL,
+	        'y'	                            REAL NOT NULL,
+	        'z' 	                        REAL NOT NULL,
+            'last_checked'                  INTEGER
+            );""")
+    c.execute("""CREATE TABLE 'version' (
+	        'date'	                        INTEGER NOT NULL
+            );""")
+
+    t = int(time.time())
+    c.execute("INSERT INTO version (date) VALUES (?)", (t,)) # we need a tuple here, create one with only 1 entry
+
+    numberOfSystems = len(systemNames)
+    currentProgress = 0
+    print("Calculating the coordinates and filling the database...")
+    print("00 % complete")
+    for i, name in enumerate(systemNames):
+        newProgess = int((i / numberOfSystems) * 100)
+        if newProgess > currentProgress:
+            currentProgress = newProgess
+            print("{0:02d} % complete".format(currentProgress))
+        #s = edtsSystem.from_name(name, allow_known=False) # EDTS needs an update for this to work
+        s = None
+        if s:
+            c.execute("INSERT INTO systems (name, x, y, z) VALUES (?,?,?,?)", (s.name, s.position.x, s.position.y, s.position.z))
+
+    conn.commit()
 
 
 if __name__ == "__main__":
