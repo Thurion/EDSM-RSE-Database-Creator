@@ -90,8 +90,7 @@ def main():
         if newProgess > currentProgress:
             currentProgress = newProgess
             print("{0:02d} % complete".format(currentProgress))
-        #s = edtsSystem.from_name(name, allow_known=False) # EDTS needs an update for this to work
-        s = None
+        s = edtsSystem.from_name(name, allow_known=False) # EDTS needs an update for this to work
         if s:
             c.execute("INSERT INTO systems (name, x, y, z) VALUES (?,?,?,?)", (s.name, s.position.x, s.position.y, s.position.z))
 
