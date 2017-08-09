@@ -18,12 +18,12 @@
 
 import os
 import sys
-import urllib.request
 import json
 import sqlite3
 import time
 import re
 import multiprocessing as mp
+import requests
 from tqdm import tqdm
 from edts.edtslib import system as edtsSystem
 
@@ -48,11 +48,18 @@ def main():
     if os.path.exists(jsonFile) and (time.time() - os.path.getctime(jsonFile)) > LENGTH_OF_DAY:
         print("json is older than 1 day. It will be removed.")
         os.remove(jsonFile)
+    # download json file if it doesn't exist
     if not os.path.exists(jsonFile):
-        print("Downloading systemsWithoutCoordinates.json from EDSM.")
-        r = urllib.request.urlopen("https://www.edsm.net/dump/systemsWithoutCoordinates.json")
+        print("Downloading systemsWithoutCoordinates.json from EDSM...")
+        r = requests.get("https://www.edsm.net/dump/systemsWithoutCoordinates.json", stream=True)
+        total_size = int(r.headers.get('content-length', 0)); 
+        pbar = tqdm(r.iter_content(32*1024), total=total_size, unit='B', unit_scale=True)
         with open(jsonFile, 'b+w') as f:
-            f.write(r.read())
+            for data in r.iter_content(chunk_size=32*1024):
+                if data:
+                    f.write(data)
+                    pbar.update(32*1024)
+        pbar.close()
 
     permitSectorsList = list()
     if os.path.exists(permitSectorsFile):
