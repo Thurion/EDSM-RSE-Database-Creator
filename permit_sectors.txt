@@ -26,3 +26,4 @@ NGC 1647 Sector
 NGC 2264 Sector
 NGC 2286 Sector
 NGC 3603 Sector
+Cone
