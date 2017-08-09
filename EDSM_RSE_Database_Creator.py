@@ -23,12 +23,16 @@ import sqlite3
 import time
 import re
 import multiprocessing as mp
+import logging
 import requests
 from tqdm import tqdm
 from edts.edtslib import system as edtsSystem
 
 LENGTH_OF_DAY = 86400
 NUMBER_OF_PROCESSES = 6
+
+logging.basicConfig(filename='edsm-rse.log',level=logging.WARN)
+from edts.edtslib import system as edtsSystem
 
 def coordinatesFromName(name):
     s = edtsSystem.from_name(name, allow_known=False)
@@ -117,6 +121,8 @@ def main():
         if result:
             c.execute("INSERT INTO systems (name, x, y, z) VALUES (?,?,?,?)", result)
 
+    print("Creating index...")
+    c.execute("CREATE INDEX 'systems_coordinates' ON 'systems' ('x' ASC,'y' ASC,'z' ASC)")
     print("Writing the database...")
     conn.commit()
 
