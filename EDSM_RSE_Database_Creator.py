@@ -29,6 +29,7 @@ LENGTH_OF_DAY = 86400
 
 def main():
     jsonFile =  os.path.join(os.getcwd(), "systemsWithoutCoordinates.json")
+    versionFile = os.path.join(os.getcwd(), "version.txt")
     dbFile = os.path.join(os.getcwd(), "systemsWithoutCoordinates.sqlite")
     permitSectorsFile = os.path.join(os.getcwd(), "permit_sectors.txt")
 
@@ -93,8 +94,13 @@ def main():
         s = edtsSystem.from_name(name, allow_known=False) # EDTS needs an update for this to work
         if s:
             c.execute("INSERT INTO systems (name, x, y, z) VALUES (?,?,?,?)", (s.name, s.position.x, s.position.y, s.position.z))
-
     conn.commit()
+
+    # write version text file
+    if os.path.exists(versionFile):
+        os.remove(versionFile)
+    with open(versionFile, "w") as file:
+        file.write(str(t))
 
 
 if __name__ == "__main__":
