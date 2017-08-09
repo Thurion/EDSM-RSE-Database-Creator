@@ -37,7 +37,6 @@ def coordinatesFromName(name):
     else:
         return None
 
-
 def main():
     jsonFile =  os.path.join(os.getcwd(), "systemsWithoutCoordinates.json")
     versionFile = os.path.join(os.getcwd(), "version.txt")
@@ -50,19 +49,21 @@ def main():
     if os.path.exists(jsonFile) and (time.time() - os.path.getctime(jsonFile)) > LENGTH_OF_DAY:
         print("json is older than 1 day. It will be removed.")
         os.remove(jsonFile)
+
     # download json file if it doesn't exist
     if not os.path.exists(jsonFile):
         print("Downloading systemsWithoutCoordinates.json from EDSM...")
         r = requests.get("https://www.edsm.net/dump/systemsWithoutCoordinates.json", stream=True)
         total_size = int(r.headers.get('content-length', 0)); 
-        pbar = tqdm(r.iter_content(32*1024), total=total_size, unit='B', unit_scale=True)
-        with open(jsonFile, 'b+w') as f:
-            for data in r.iter_content(chunk_size=32*1024):
-                if data:
-                    f.write(data)
-                    pbar.update(32*1024)
-        pbar.close()
+        with tqdm(r.iter_content(32*1024), total=total_size, unit='B', unit_scale=True) as pbar:
+            with open(jsonFile, 'b+w') as f:
+                for data in r.iter_content(chunk_size=32*1024):
+                    if data:
+                        f.write(data)
+                        pbar.update(32*1024)
+            pbar.close()
 
+    # load sectors that require a permit
     permitSectorsList = list()
     if os.path.exists(permitSectorsFile):
         with open(permitSectorsFile) as file:
@@ -75,11 +76,16 @@ def main():
     useRegex = True if len(permitSectorsList) > 0 else False
     with open(jsonFile) as file:
         j = json.load(file)
-        for entry in j:
-            if useRegex and permitLocked.match(entry["name"]):
-                continue # ignore
-            systemNames.append(entry["name"])
+        print("Applying filters...")
+        with tqdm(total=len(j), unit="systems") as pbar:
+            for entry in j:
+                pbar.update(1)
+                if useRegex and permitLocked.match(entry["name"]):
+                    continue # filter out system
+                systemNames.append(entry["name"])
+            pbar.close()
 
+    # remove old sqlite files
     if os.path.exists(dbFile):
         os.remove(dbFile)
     if os.path.exists(dbJournalFile):
