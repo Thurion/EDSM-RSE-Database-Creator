@@ -41,7 +41,9 @@ def coordinatesFromName(name):
 def main():
     jsonFile =  os.path.join(os.getcwd(), "systemsWithoutCoordinates.json")
     versionFile = os.path.join(os.getcwd(), "version.txt")
-    dbFile = os.path.join(os.getcwd(), "systemsWithoutCoordinates.sqlite")
+    dbFileName = "systemsWithoutCoordinates"
+    dbFile = os.path.join(os.getcwd(), dbFileName + ".sqlite")
+    dbJournalFile = os.path.join(os.getcwd(), dbFileName + ".sqlite-journal")
     permitSectorsFile = os.path.join(os.getcwd(), "permit_sectors.txt")
 
     # delete the json file if it's older than 1 day
@@ -80,6 +82,8 @@ def main():
 
     if os.path.exists(dbFile):
         os.remove(dbFile)
+    if os.path.exists(dbJournalFile):
+        os.remove(dbJournalFile)
 
     conn = sqlite3.connect(dbFile)
     conn.text_factory = str
@@ -117,7 +121,7 @@ def main():
     with open(versionFile, "w") as file:
         file.write(str(t))
     
-        print("All done :)")
+    print("All done :)")
 
 if __name__ == "__main__":
     main()

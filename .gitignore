@@ -401,3 +401,4 @@ paket-files/
 *.db-journal
 *.sqlite
 version.txt
+*.sqlite-journal
