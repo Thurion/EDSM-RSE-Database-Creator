@@ -50,7 +50,8 @@ def main():
     permitSectorsFile = os.path.join(os.getcwd(), "permit_sectors.txt")
 
     # delete the json file if it's older than 1 day
-    if os.path.exists(jsonFile) and (time.time() - os.path.getctime(jsonFile)) > LENGTH_OF_DAY:
+    # use modification time of file because the creation time might not change on windows even if the file was deleted
+    if os.path.exists(jsonFile) and (time.time() - os.path.getmtime(jsonFile)) > LENGTH_OF_DAY: 
         print("json is older than 1 day. It will be removed.")
         os.remove(jsonFile)
 
