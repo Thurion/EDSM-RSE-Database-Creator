@@ -118,20 +118,20 @@ def main():
     c = conn.cursor()
 
     c.execute("""CREATE TABLE 'systems' (
-	        'id'	                        INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
-	        'name'                  	    TEXT NOT NULL,
-            'x'                     	    REAL NOT NULL,
-	        'y'	                            REAL NOT NULL,
-	        'z' 	                        REAL NOT NULL,
+            'id'                            INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
+            'name'                          TEXT NOT NULL,
+            'x'                             REAL NOT NULL,
+            'y'                             REAL NOT NULL,
+            'z'                             REAL NOT NULL,
             'last_checked'                  INTEGER
             );""")
     c.execute("""CREATE TABLE 'duplicates' (
-            'id'	                        INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
-	        'real_name'                  	TEXT NOT NULL,
-            'pq_name'                     	TEXT NOT NULL
+            'id'                            INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
+            'real_name'                     TEXT NOT NULL,
+            'pq_name'                       TEXT NOT NULL
             );""")
     c.execute("""CREATE TABLE 'version' (
-	        'date'	                        INTEGER NOT NULL
+            'date'                          INTEGER NOT NULL
             );""")
 
     t = int(time.time())
