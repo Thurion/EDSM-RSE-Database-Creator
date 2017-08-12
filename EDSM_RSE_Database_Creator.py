@@ -26,7 +26,7 @@ import multiprocessing as mp
 import logging
 import requests
 from tqdm import tqdm
-from edts.edtslib import system as edtsSystem
+from edts.edtslib import pgnames, id64data, system as edtsSystem
 
 LENGTH_OF_DAY = 86400
 NUMBER_OF_PROCESSES = 6
@@ -77,16 +77,33 @@ def main():
 
     print("Reading json file...")
     systemNames = list()
+    duplicates = list()
     useRegex = True if len(permitSectorsList) > 0 else False
+
+    def processDuplicate(name, id):
+        dupeSystem = edtsSystem.from_id64(id, allow_known=False)
+        if useRegex and permitLocked.match(dupeSystem.name):
+            return  # filter out system
+        duplicates.append((name, dupeSystem))
+
     with open(jsonFile) as file:
         j = json.load(file)
-        print("Applying filters...")
+        print("Applying filters and processing duplicates...")
         with tqdm(total=len(j), unit="systems") as pbar:
             for entry in j:
                 pbar.update(1)
-                if useRegex and permitLocked.match(entry["name"]):
+                name = entry["name"]
+                if useRegex and permitLocked.match(name):
                     continue # filter out system
-                systemNames.append(entry["name"])
+                if not pgnames.is_pg_system_name(name):
+                    id64 = id64data.known_systems.get(name.lower(), None)
+                    if isinstance(id64, list):
+                        for id in id64:
+                            processDuplicate(name, id)
+                    else:
+                        systemNames.append(name)
+                else:
+                    systemNames.append(name)
             pbar.close()
 
     # remove old sqlite files
@@ -107,6 +124,11 @@ def main():
 	        'z' 	                        REAL NOT NULL,
             'last_checked'                  INTEGER
             );""")
+    c.execute("""CREATE TABLE 'duplicates' (
+            'id'	                        INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
+	        'real_name'                  	TEXT NOT NULL,
+            'pq_name'                     	TEXT NOT NULL
+            );""")
     c.execute("""CREATE TABLE 'version' (
 	        'date'	                        INTEGER NOT NULL
             );""")
@@ -124,6 +146,9 @@ def main():
     print("Creating index...")
     c.execute("CREATE INDEX 'systems_coordinates' ON 'systems' ('x' ASC,'y' ASC,'z' ASC)")
     print("Writing the database...")
+    for realName, pgSystem in duplicates:
+        c.execute("INSERT INTO systems (name, x, y, z) VALUES (?,?,?,?)", (pgSystem.name, pgSystem.position.x, pgSystem.position.y, pgSystem.position.z))
+        c.execute("INSERT INTO duplicates (real_name, pq_name) VALUES (?,?)", (realName, pgSystem.name))
     conn.commit()
 
     # write version text file
