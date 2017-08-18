@@ -164,7 +164,8 @@ class EDSM_RSE_DB():
         if os.path.exists(self.permitSectorsFile):
             with open(self.permitSectorsFile) as file:
                 for line in file:
-                    permitSectorsList.append(line.strip())
+                    if len(line) > 2:
+                        permitSectorsList.append(line.strip())
         permitLocked = re.compile("^({0})".format("|".join(permitSectorsList)), re.IGNORECASE)
 
         print("Reading json file...")
