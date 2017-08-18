@@ -116,9 +116,14 @@ class EDSM_RSE_DB():
             returnValue = False
             try:
                 self.openDatabase()
+                # try all tables in case one is corrupted
                 self.c.execute("SELECT * from version")
-                results = self.c.fetchall()
-                returnValue = len(results) > 0
+                results1 = self.c.fetchall()
+                self.c.execute("SELECT * from systems LIMIT 100")
+                results2 = self.c.fetchall()
+                self.c.execute("SELECT * from duplicates LIMIT 10")
+                results3 = self.c.fetchall()
+                return len(results1) > 0 and len(results2) > 0 # no guarantee that duplicates are present
             except: pass # ignore
             if not returnValue:
                 self.c = None
