@@ -222,7 +222,6 @@ class EDSM_RSE_DB():
 
         removed = 0
         needsAdding = list()
-        dupes = self.duplicates.copy()
 
         for systemName in self.systemNames:
             if systemName in dbSystems:
@@ -235,33 +234,36 @@ class EDSM_RSE_DB():
                     needsAdding.append(result)
             pbar.update(1)
 
-        deleteMe = set()
+        dupes = dict()
         for realName, pgSystems in self.duplicates.items():
             # remove pg system names or they will be deleted otherwise
             for pgSystem in pgSystems:
                 if pgSystem.name in dbSystems:
                     dbSystems.pop(pgSystem.name, 0)
-                    dupes.pop(realName, 0)
                 else:
-                    needsAdding.append(pgSystem.name)
+                    needsAdding.append((pgSystem.name, pgSystem.position.x, pgSystem.position.y, pgSystem.position.z))
+                    dupes.setdefault(realName, list())
+                    dupes[realName].append(pgSystem)
             pbar.update(1)
         pbar.close()
 
-        print("Deleting {0} entries and adding {1} new ones".format(len(dbSystems.keys()), len(needsAdding)))
+        print("Deleting {0} entries and adding {1} new ones...".format(len(dbSystems.keys()), len(needsAdding)))
         for id in dbSystems.values():
             self.c.execute("DELETE FROM systems WHERE systems.id = ?", (id,))
         for edSystem in needsAdding:
             self.c.execute("INSERT INTO systems (name, x, y, z) VALUES (?,?,?,?)", edSystem)
 
+        print("Handling {0} duplicate systems...".format(len(dupes.keys())))
+        # TODO also delete entries for duplicates
+        # TODO prevent adding duplicates of duplicate pairs
         for realName, pgSystems in dupes.items():
             for pgSystem in pgSystems:
-                self.c.execute("INSERT INTO systems (name, x, y, z) VALUES (?,?,?,?)", (pgSystem.name, pgSystem.position.x, pgSystem.position.y, pgSystem.position.z))
                 self.c.execute("INSERT INTO duplicates (real_name, pq_name) VALUES (?,?)", (realName, pgSystem.name))
 
         self.c.execute("UPDATE version SET date = ? WHERE version.date IN (SELECT * FROM version)", (currentTime,))
         self.conn.commit()
         if len(dbSystems.keys()) > 0:
-            print("Running VACUUM")
+            print("Running VACUUM...")
             self.conn.execute("VACUUM")
         self.createVersionFile(currentTime)
 
