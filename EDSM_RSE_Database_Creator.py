@@ -61,6 +61,7 @@ class EDSM_RSE_DB():
             self.conn.text_factory = str
             self.c = self.conn.cursor()
 
+
     def createDatabase(self, currentTime):
         self.openDatabase()
 
@@ -93,10 +94,13 @@ class EDSM_RSE_DB():
         print("Creating index...")
         self.c.execute("CREATE INDEX 'systems_coordinates' ON 'systems' ('x' ASC,'y' ASC,'z' ASC)")
         print("Writing the database...")
-        for realName, pgSystem in self.duplicates:
-            self.c.execute("INSERT INTO systems (name, x, y, z) VALUES (?,?,?,?)", (pgSystem.name, pgSystem.position.x, pgSystem.position.y, pgSystem.position.z))
-            self.c.execute("INSERT INTO duplicates (real_name, pq_name) VALUES (?,?)", (realName, pgSystem.name))
+        for realName, pgSystems in self.duplicates.items():
+            for pgSystem in pgSystems:
+                self.c.execute("INSERT INTO systems (name, x, y, z) VALUES (?,?,?,?)", (pgSystem.name, pgSystem.position.x, pgSystem.position.y, pgSystem.position.z))
+                self.c.execute("INSERT INTO duplicates (real_name, pq_name) VALUES (?,?)", (realName, pgSystem.name))
         self.conn.commit()
+
+        self.createVersionFile(currentTime)
 
 
     def createVersionFile(self, currentTime):
@@ -148,6 +152,7 @@ class EDSM_RSE_DB():
                             pbar.update(32*1024)
                 pbar.close()
 
+
     def applyFilters(self):
         # load sectors that require a permit
         permitSectorsList = list()
@@ -159,14 +164,14 @@ class EDSM_RSE_DB():
 
         print("Reading json file...")
         self.systemNames = list()
-        self.duplicates = list()
+        self.duplicates = dict()
         useRegex = True if len(permitSectorsList) > 0 else False
-
+        
         def processDuplicate(name, id):
             dupeSystem = edtsSystem.from_id64(id, allow_known=False)
             if useRegex and permitLocked.match(dupeSystem.name):
-                return  # filter out system
-            self.duplicates.append((name, dupeSystem))
+                return  None
+            return (name, dupeSystem)
 
         with open(self.jsonFile) as file:
             j = json.load(file)
@@ -181,23 +186,90 @@ class EDSM_RSE_DB():
                         id64 = id64data.known_systems.get(name.lower(), None)
                         if isinstance(id64, list):
                             for id in id64:
-                                processDuplicate(name, id)
+                                dupe = processDuplicate(name, id)
+                                if dupe: 
+                                    realName, pgSystem = dupe
+                                    self.duplicates.setdefault(realName, list())
+                                    self.duplicates[realName].append(pgSystem)
                         else:
                             self.systemNames.append(name)
                     else:
                         self.systemNames.append(name)
                 pbar.close()
 
+
+    def applyDelta(self, currentTime):
+        print("Applying changes only...")
+        print("Reading database...")
+        self.openDatabase()
+        dbSystems = dict()
+        self.c.execute("SELECT systems.name, systems.id FROM systems")
+        rows = self.c.fetchall()
+
+        print("Searching for changes...")
+        total = len(rows) + len(self.systemNames) + len(self.duplicates.keys())
+        pbar = tqdm(total=total, unit="steps")
+
+        for row in rows:
+            dbSystems.setdefault(row[0], row[1])
+            pbar.update(1)
+
+        removed = 0
+        needsAdding = list()
+        dupes = self.duplicates.copy()
+
+        for systemName in self.systemNames:
+            if systemName in dbSystems:
+                # system is already present, do nothing
+                # only dupe PG name is stored in systems table
+                dbSystems.pop(systemName, 0)
+            else:
+                result = coordinatesFromName(systemName)
+                if result:
+                    needsAdding.append(result)
+            pbar.update(1)
+
+        deleteMe = set()
+        for realName, pgSystems in self.duplicates.items():
+            # remove pg system names or they will be deleted otherwise
+            for pgSystem in pgSystems:
+                if pgSystem.name in dbSystems:
+                    dbSystems.pop(pgSystem.name, 0)
+                    dupes.pop(realName, 0)
+                else:
+                    needsAdding.append(pgSystem.name)
+            pbar.update(1)
+        pbar.close()
+
+        print("Deleting {0} entries and adding {1} new ones".format(len(dbSystems.keys()), len(needsAdding)))
+        for id in dbSystems.values():
+            self.c.execute("DELETE FROM systems WHERE systems.id = ?", (id,))
+        for edSystem in needsAdding:
+            self.c.execute("INSERT INTO systems (name, x, y, z) VALUES (?,?,?,?)", edSystem)
+
+        for realName, pgSystems in dupes.items():
+            for pgSystem in pgSystems:
+                self.c.execute("INSERT INTO systems (name, x, y, z) VALUES (?,?,?,?)", (pgSystem.name, pgSystem.position.x, pgSystem.position.y, pgSystem.position.z))
+                self.c.execute("INSERT INTO duplicates (real_name, pq_name) VALUES (?,?)", (realName, pgSystem.name))
+
+        self.c.execute("UPDATE version SET date = ? WHERE version.date IN (SELECT * FROM version)", (currentTime,))
+        self.conn.commit()
+        if len(dbSystems.keys()) > 0:
+            print("Running VACUUM")
+            self.conn.execute("VACUUM")
+        self.createVersionFile(currentTime)
+
+
 def main():
     edsmRse = EDSM_RSE_DB()
     edsmRse.checkAndDownloadJSON()
     edsmRse.applyFilters()
 
-    currentTime = time.time()
+    currentTime = int(time.time())
     if not edsmRse.isDatabasePresentAndValid():
         edsmRse.createDatabase(currentTime)
-        edsmRse.createVersionFile(currentTime)
-   
+    else:
+        edsmRse.applyDelta(currentTime)
     print("All done :)")
 
 if __name__ == "__main__":
