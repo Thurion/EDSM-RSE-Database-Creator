@@ -63,6 +63,11 @@ class EDSM_RSE_DB():
 
 
     def createDatabase(self, currentTime):
+        if os.path.exists(self.dbFile):
+            os.remove(self.dbFile)
+        if os.path.exists(self.dbJournalFile):
+            os.remove(self.dbJournalFile)
+
         self.openDatabase()
 
         self.c.execute("""CREATE TABLE 'systems' (
@@ -113,7 +118,6 @@ class EDSM_RSE_DB():
 
     def isDatabasePresentAndValid(self):
         if os.path.exists(self.dbFile):
-            returnValue = False
             try:
                 self.openDatabase()
                 # try all tables in case one is corrupted
@@ -123,16 +127,13 @@ class EDSM_RSE_DB():
                 results2 = self.c.fetchall()
                 self.c.execute("SELECT * from duplicates LIMIT 10")
                 results3 = self.c.fetchall()
-                return len(results1) > 0 and len(results2) > 0 # no guarantee that duplicates are present
-            except: pass # ignore
-            if not returnValue:
+                self.conn.close()
                 self.c = None
                 self.conn = None
-                # remove faulty database
-                os.remove(self.dbFile)
-                if os.path.exists(self.dbJournalFile):
-                    os.remove(self.dbJournalFile)
-            return returnValue
+                return len(results1) > 0 and len(results2) > 0 # no guarantee that duplicates are present
+            except:
+                self.c = None
+                self.conn = None
         return False
 
 
