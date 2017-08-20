@@ -151,7 +151,7 @@ class EDSM_RSE_DB():
             r = requests.get("https://www.edsm.net/dump/systemsWithoutCoordinates.json", stream=True)
             total_size = int(r.headers.get('content-length', 0)); 
             with tqdm(r.iter_content(32*1024), total=total_size, unit='B', unit_scale=True) as pbar:
-                with open(self.jsonFile, 'b+w') as f:
+                with open(self.jsonFile, 'wb') as f:
                     for data in r.iter_content(chunk_size=32*1024):
                         if data:
                             f.write(data)
