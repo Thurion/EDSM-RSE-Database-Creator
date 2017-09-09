@@ -147,16 +147,32 @@ class EDSM_RSE_DB():
 
         # download json file if it doesn't exist
         if not os.path.exists(self.jsonFile):
-            print("Downloading systemsWithoutCoordinates.json from EDSM...")
-            r = requests.get("https://www.edsm.net/dump/systemsWithoutCoordinates.json", stream=True)
-            total_size = int(r.headers.get('content-length', 0)); 
-            with tqdm(r.iter_content(32*1024), total=total_size, unit='B', unit_scale=True) as pbar:
-                with open(self.jsonFile, 'wb') as f:
-                    for data in r.iter_content(chunk_size=32*1024):
-                        if data:
-                            f.write(data)
-                            pbar.update(32*1024)
-                pbar.close()
+            tries = 0
+            while tries < 3:
+                print("Downloading systemsWithoutCoordinates.json from EDSM...")
+                r = requests.get("https://www.edsm.net/dump/systemsWithoutCoordinates.json", stream=True)
+                total_size = int(r.headers.get('content-length', 0)); 
+                with tqdm(r.iter_content(32*1024), total=total_size, unit='B', unit_scale=True) as pbar:
+                    with open(self.jsonFile, 'wb') as f:
+                        for data in r.iter_content(chunk_size=32*1024):
+                            if data:
+                                f.write(data)
+                                pbar.update(32*1024)
+                    pbar.close()
+                # check if file size matches
+                statinfo = os.stat(self.jsonFile)
+                if statinfo.st_size != total_size:
+                    if os.path.exists(self.jsonFile):
+                        os.remove(self.jsonFile)
+                    tries += 1
+                    print("Failed to download file.")
+                else:
+                    break
+            else:
+                print("Failed to download file 3 times: aborting.")
+                if os.path.exists(self.jsonFile):
+                    os.remove(self.jsonFile)
+                sys.exit(1)
 
 
     def applyFilters(self):
