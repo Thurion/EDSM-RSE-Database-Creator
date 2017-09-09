@@ -50,6 +50,7 @@ class EDSM_RSE_DB():
         self.dbFile = os.path.join(os.getcwd(), dbFileName + ".sqlite")
         self.dbJournalFile = os.path.join(os.getcwd(), dbFileName + ".sqlite-journal")
         self.permitSectorsFile = os.path.join(os.getcwd(), "permit_sectors.txt")
+        self.systemFilterFile = os.path.join(os.getcwd(), "system_filter.txt")
 
         self.conn = None
         self.c = None
@@ -181,9 +182,16 @@ class EDSM_RSE_DB():
         if os.path.exists(self.permitSectorsFile):
             with open(self.permitSectorsFile) as file:
                 for line in file:
-                    if len(line) > 2:
+                    if len(line) > 2: # ignore empty lines
                         permitSectorsList.append(line.strip())
         permitLocked = re.compile("^({0})".format("|".join(permitSectorsList)), re.IGNORECASE)
+
+        systemSet = set()
+        if os.path.exists(self.systemFilterFile):
+            with open(self.systemFilterFile) as file:
+                for line in file:
+                    if len(line) > 2: # ignore empty lines
+                        systemSet.add(line.strip().lower())
 
         print("Reading json file...")
         self.systemNames = list()
@@ -203,7 +211,7 @@ class EDSM_RSE_DB():
                 for entry in j:
                     pbar.update(1)
                     name = entry["name"]
-                    if useRegex and permitLocked.match(name):
+                    if useRegex and permitLocked.match(name) or name.lower() in systemSet:
                         continue # filter out system
                     if not pgnames.is_pg_system_name(name):
                         id64 = id64data.known_systems.get(name.lower(), None)
