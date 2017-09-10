@@ -397,6 +397,8 @@ paket-files/
 
 # End of https://www.gitignore.io/api/python,visualstudio
 *.json
+*.sqlite.old
+*.cmd
 *.db
 *.db-journal
 *.sqlite
