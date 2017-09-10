@@ -50,6 +50,7 @@ class EDSM_RSE_DB():
         self.dbFile = os.path.join(os.getcwd(), dbFileName + ".sqlite")
         self.dbJournalFile = os.path.join(os.getcwd(), dbFileName + ".sqlite-journal")
         self.permitSectorsFile = os.path.join(os.getcwd(), "permit_sectors.txt")
+        self.systemFilterFile = os.path.join(os.getcwd(), "system_filter.txt")
 
         self.conn = None
         self.c = None
@@ -147,16 +148,32 @@ class EDSM_RSE_DB():
 
         # download json file if it doesn't exist
         if not os.path.exists(self.jsonFile):
-            print("Downloading systemsWithoutCoordinates.json from EDSM...")
-            r = requests.get("https://www.edsm.net/dump/systemsWithoutCoordinates.json", stream=True)
-            total_size = int(r.headers.get('content-length', 0)); 
-            with tqdm(r.iter_content(32*1024), total=total_size, unit='B', unit_scale=True) as pbar:
-                with open(self.jsonFile, 'wb') as f:
-                    for data in r.iter_content(chunk_size=32*1024):
-                        if data:
-                            f.write(data)
-                            pbar.update(32*1024)
-                pbar.close()
+            tries = 0
+            while tries < 3:
+                print("Downloading systemsWithoutCoordinates.json from EDSM...")
+                r = requests.get("https://www.edsm.net/dump/systemsWithoutCoordinates.json", stream=True)
+                total_size = int(r.headers.get('content-length', 0)); 
+                with tqdm(r.iter_content(32*1024), total=total_size, unit='B', unit_scale=True) as pbar:
+                    with open(self.jsonFile, 'wb') as f:
+                        for data in r.iter_content(chunk_size=32*1024):
+                            if data:
+                                f.write(data)
+                                pbar.update(32*1024)
+                    pbar.close()
+                # check if file size matches
+                statinfo = os.stat(self.jsonFile)
+                if statinfo.st_size != total_size:
+                    if os.path.exists(self.jsonFile):
+                        os.remove(self.jsonFile)
+                    tries += 1
+                    print("Failed to download file.")
+                else:
+                    break
+            else:
+                print("Failed to download file 3 times: aborting.")
+                if os.path.exists(self.jsonFile):
+                    os.remove(self.jsonFile)
+                sys.exit(1)
 
 
     def applyFilters(self):
@@ -165,9 +182,16 @@ class EDSM_RSE_DB():
         if os.path.exists(self.permitSectorsFile):
             with open(self.permitSectorsFile) as file:
                 for line in file:
-                    if len(line) > 2:
+                    if len(line) > 2: # ignore empty lines
                         permitSectorsList.append(line.strip())
         permitLocked = re.compile("^({0})".format("|".join(permitSectorsList)), re.IGNORECASE)
+
+        systemSet = set()
+        if os.path.exists(self.systemFilterFile):
+            with open(self.systemFilterFile) as file:
+                for line in file:
+                    if len(line) > 2: # ignore empty lines
+                        systemSet.add(line.strip().lower())
 
         print("Reading json file...")
         self.systemNames = list()
@@ -187,7 +211,7 @@ class EDSM_RSE_DB():
                 for entry in j:
                     pbar.update(1)
                     name = entry["name"]
-                    if useRegex and permitLocked.match(name):
+                    if useRegex and permitLocked.match(name) or name.lower() in systemSet:
                         continue # filter out system
                     if not pgnames.is_pg_system_name(name):
                         id64 = id64data.known_systems.get(name.lower(), None)
