@@ -23,6 +23,7 @@ Col 121 Sector
 Col 97 Sector
 M41 Sector
 NGC 1647 Sector
+NGC 1647 ZSC
 NGC 2264 Sector
 NGC 2286 Sector
 NGC 3603 Sector
