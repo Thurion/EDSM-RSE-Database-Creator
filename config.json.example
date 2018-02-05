@@ -1,0 +1,12 @@
+{
+	"edsm_rse" : {
+		"number_of_processes" : 6
+	},
+	"database" : {
+		"host" : "127.0.0.1",
+		"port" : "5432",
+		"dbname" : "edsm_rse_db", 
+		"user" : "edsm_rse",
+		"password" : "secret password"
+	}
+}
