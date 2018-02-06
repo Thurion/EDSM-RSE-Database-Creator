@@ -163,8 +163,8 @@ class EDSM_RSE_DB():
         if not os.path.exists(self.jsonFile):
             print("Downloading systemsWithoutCoordinates.json from EDSM...")
             r = requests.get("https://www.edsm.net/dump/systemsWithoutCoordinates.json", stream=True)
-            with tqdm(unit='B', unit_scale=True) as pbar,\
-                 open(self.jsonFile, 'wb') as f:
+            with tqdm(unit="B", unit_scale=True) as pbar,\
+                 open(self.jsonFile, "wb") as f:
                 for data in r.iter_content(chunk_size=32*1024):
                     if data:
                         f.write(data)
@@ -285,7 +285,7 @@ class EDSM_RSE_DB():
 
         sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS13Z7df43XVQt9-rrVSkngD-T9xGWiSs7hRPPp0P8ah3iy7L6yNeyXf3oDUrUTcNEkQRAQnf9ZWXQC/pub?gid=0&single=true&output=csv"
         sheetResponse = urllib.request.urlopen(sheetUrl)
-        navBeaconCSV = csv.reader(sheetResponse.read().decode("utf-8").split("\r\n"), delimiter=',')
+        navBeaconCSV = csv.reader(sheetResponse.read().decode("utf-8").split("\r\n"), delimiter=",")
         id64list = list()
         for data in tqdm(navBeaconCSV, desc="Navbeacons..."):
             if navBeaconCSV.line_num < 4:
