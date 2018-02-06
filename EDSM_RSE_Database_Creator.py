@@ -55,7 +55,7 @@ def insertWorker(cur, conn, sql, q, pbar):
         q.task_done()
 
 class EliteSystem():
-    def __init__(self, name, id64 = 0, x = 0, y = 0, z = 0, uncertainty = 0):
+    def __init__(self, name, id64 = None, x = None, y = None, z = None, uncertainty = 0):
         self.name = name
         self.id64 = id64
         self.x = x
@@ -75,7 +75,7 @@ class EliteSystem():
             self.uncertainty = coordinates["precision"]
 
     def getCoordinates(self):
-        if self.x == 0 and self.y == 0 and self.z == 0:
+        if self.x == None or self.y == None or self.z == None:
             s = edtsSystem.from_name(self.name, allow_known=False)
             if s:
                 self.id64 = s.id64
@@ -83,7 +83,10 @@ class EliteSystem():
                 self.y = s.position.y
                 self.z = s.position.z
                 self.uncertainty = int(s.uncertainty * DISTANCE_MULTIPLIER + .5) # round it so it matches the values from EDSM
-        return { "id": self.id64, "name": self.name, "uncertainty": self.uncertainty, "x": self.x, "y": self.y, "z": self.z }
+        if self.id64:
+            return { "id": self.id64, "name": self.name, "uncertainty": self.uncertainty, "x": self.x, "y": self.y, "z": self.z }
+        else:
+            return None
 
 class EDSM_RSE_DB():
     def __init__(self, number_of_processes, number_of_inserts, size_of_queue, db_host, db_port, db_name, db_user, db_password):
@@ -291,7 +294,9 @@ class EDSM_RSE_DB():
                 # only dupe PG name is stored in systems table
                 dbSystems.remove(system.id64)
             else:
-                needsAdding.append(system.getCoordinates())
+                systemDictionary = system.getCoordinates()
+                if systemDictionary:
+                    needsAdding.append(systemDictionary)
             pbar.update(1)
         pbar.close()
 
