@@ -63,6 +63,9 @@ class EliteSystem():
         self.z = z
         self.uncertainty = uncertainty
 
+    def __str__(self):
+        return "id: {id}, name: {name}, x: {x}, y: {y}, z: {z}, uncertainty: {uncertainty}".format(id=self.id64, name=self.name, x=self.x, y=self.y, z=self.z, uncertainty=self.uncertainty)
+
     def fromJSON(self, j):
         self.id64 = j["id64"]
         if self.id64 == None:
@@ -258,7 +261,7 @@ class EDSM_RSE_DB():
                     if not pgnames.is_pg_system_name(name):
                         id64 = id64data.known_systems.get(name.lower(), None)
                         if isinstance(id64, list):
-                            logger.warning("Possible dupe systems", id64)
+                            logging.warning("Possible dupe systems", id64)
                         else:
                             system = EliteSystem(name)
                             system.fromJSON(entry)
@@ -297,6 +300,8 @@ class EDSM_RSE_DB():
                 systemDictionary = system.getCoordinates()
                 if systemDictionary:
                     needsAdding.append(systemDictionary)
+                else:
+                    logging.warning("No valid coordinates: {}".format(system))
             pbar.update(1)
         pbar.close()
 
