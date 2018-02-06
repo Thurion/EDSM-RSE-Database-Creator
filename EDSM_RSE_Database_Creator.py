@@ -22,6 +22,8 @@ import json
 import time
 import re
 import math
+import queue
+import threading
 import multiprocessing as mp
 import logging
 import requests
@@ -41,6 +43,16 @@ from edts.edtslib import system as edtsSystem
 
 def generateCoordinates(system):
     return system.getCoordinates()
+
+def insertWorker(cur, conn, sql, q, pbar):
+    while True:
+        systems = q.get()
+        if systems is None:
+            break
+        cur.executemany(sql, systems)
+        conn.commit()
+        pbar.update(len(systems))
+        q.task_done()
 
 class EliteSystem():
     def __init__(self, name, id64 = 0, x = 0, y = 0, z = 0, uncertainty = 0):
@@ -71,11 +83,13 @@ class EliteSystem():
         return { "id": self.id64, "name": self.name, "uncertainty": self.uncertainty, "x": self.x, "y": self.y, "z": self.z }
 
 class EDSM_RSE_DB():
-    def __init__(self, number_of_processes, db_host, db_port, db_name, db_user, db_password):
+    def __init__(self, number_of_processes, number_of_inserts, size_of_queue, db_host, db_port, db_name, db_user, db_password):
         self.jsonFile = os.path.join(os.getcwd(), "systemsWithoutCoordinates.json")
         self.permitSectorsFile = os.path.join(os.getcwd(), "permit_sectors.txt")
         self.systemFilterFile = os.path.join(os.getcwd(), "system_filter.txt")
         self.number_of_processes = number_of_processes
+        self.number_of_inserts = number_of_inserts
+        self.size_of_queue = size_of_queue
         self.db_host = db_host
         self.db_port = db_port
         self.db_name = db_name
@@ -149,12 +163,24 @@ class EDSM_RSE_DB():
             
         print("Calculating the coordinates and adding them to the database...")
         pool = mp.Pool(processes = self.number_of_processes)
-        for count, result in enumerate(tqdm(pool.imap_unordered(generateCoordinates, self.systems, chunksize=100), total=len(self.systems), unit=" systems")):
+        q = queue.Queue()
+        q.maxsize = self.size_of_queue
+        
+        pbar = tqdm(total=len(self.systems), unit=" inserts", desc="Database", position=0)
+        thread = threading.Thread(target=insertWorker, args=(self.c, self.conn, sql_insert, q, pbar))
+        thread.start()
+        systems = list()
+        for count, result in enumerate(tqdm(pool.imap_unordered(generateCoordinates, self.systems, chunksize=100), total=len(self.systems), unit=" systems", desc="Calculation", position=1)):
             if result:
                 result["action_todo"] = 1
-                self.c.execute(sql_insert, result)
-            if (count%10000==0): self.conn.commit()
-        self.conn.commit()
+                systems.append(result)
+            if count % self.number_of_inserts == 0:
+                q.put(systems, block=True)
+                systems = list()
+        q.put(systems)
+        q.put(None)
+        thread.join()
+        pbar.close()
 
         print("Creating index...")
         self.c.execute("CREATE INDEX IF NOT EXISTS systems_coordinates ON systems (x, y, z)")
@@ -345,8 +371,10 @@ def main():
 
     with open("config.json") as jf:
         j = json.load(jf)
+        rse = j["edsm_rse"]
         db = j["database"]
-        edsmRse = EDSM_RSE_DB(j["edsm_rse"]["number_of_processes"], db["host"], db["port"], db["dbname"], db["user"], db["password"])
+        edsmRse = EDSM_RSE_DB(rse["number_of_processes"], rse["number_of_processes"], rse["number_of_simultatnous_inserts"], 
+                    db["host"], db["port"], db["dbname"], db["user"], db["password"])
 
     edsmRse.checkAndDownloadJSON()
     edsmRse.applyFilters()
