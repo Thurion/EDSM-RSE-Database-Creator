@@ -62,7 +62,7 @@ class EliteSystem():
 
     def getCoordinates(self):
         if self.x == 0 and self.y == 0 and self.z == 0:
-            s = edtsSystem.from_id64(self.id64, allow_known=False)
+            s = edtsSystem.from_name(self.name, allow_known=False)
             if s:
                 self.x = s.position.x
                 self.y = s.position.y
