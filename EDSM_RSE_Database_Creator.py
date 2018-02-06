@@ -19,7 +19,6 @@
 import os
 import sys
 import json
-import sqlite3
 import time
 import re
 import multiprocessing as mp
@@ -50,9 +49,6 @@ def coordinatesFromName(name):
 class EDSM_RSE_DB():
     def __init__(self, number_of_processes, db_host, db_port, db_name, db_user, db_password):
         self.jsonFile =  os.path.join(os.getcwd(), "systemsWithoutCoordinates.json")
-        dbFileName = "systemsWithoutCoordinates"
-        self.dbFile = os.path.join(os.getcwd(), dbFileName + ".sqlite")
-        self.dbJournalFile = os.path.join(os.getcwd(), dbFileName + ".sqlite-journal")
         self.permitSectorsFile = os.path.join(os.getcwd(), "permit_sectors.txt")
         self.systemFilterFile = os.path.join(os.getcwd(), "system_filter.txt")
         self.number_of_processes = number_of_processes
@@ -71,11 +67,6 @@ class EDSM_RSE_DB():
             self.c = self.conn.cursor()
 
     def createDatabase(self):
-        if os.path.exists(self.dbFile):
-            os.remove(self.dbFile)
-        if os.path.exists(self.dbJournalFile):
-            os.remove(self.dbJournalFile)
-
         self.openDatabase()
 
         self.c.execute(" ".join([
