@@ -65,6 +65,8 @@ class EliteSystem():
 
     def fromJSON(self, j):
         self.id64 = j["id64"]
+        if self.id64 == None:
+            self.getCoordinates() # initialize
         if "estimatedCoordinates" in j:
             coordinates = j["estimatedCoordinates"]
             self.x = coordinates["x"]
@@ -76,6 +78,7 @@ class EliteSystem():
         if self.x == 0 and self.y == 0 and self.z == 0:
             s = edtsSystem.from_name(self.name, allow_known=False)
             if s:
+                self.id64 = s.id64
                 self.x = s.position.x
                 self.y = s.position.y
                 self.z = s.position.z
