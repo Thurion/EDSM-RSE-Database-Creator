@@ -203,8 +203,7 @@ class EDSM_RSE_DB():
                     if not pgnames.is_pg_system_name(name):
                         id64 = id64data.known_systems.get(name.lower(), None)
                         if isinstance(id64, list):
-                            # TODO: write to log
-                            pass
+                            logger.warning("Possible dupe systems", id64)
                         else:
                             self.systemNames.append(name)
                     else:
