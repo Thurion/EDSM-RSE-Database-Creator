@@ -21,6 +21,7 @@ import sys
 import json
 import time
 import re
+import math
 import multiprocessing as mp
 import logging
 import requests
@@ -33,18 +34,41 @@ from edts.edtslib import pgnames, id64data, system as edtsSystem
 LENGTH_OF_DAY = 60 * 60 * 22 # set to 22 hours to make sure the json is downloaded every day
 
 ACTIONX = (2**32)-1
+DISTANCE_MULTIPLIER = 1.732 # sqrt(3) or length of vector (1, 1, 1)
 
 logging.basicConfig(filename="edsm-rse.log",level=logging.WARN)
 from edts.edtslib import system as edtsSystem
 
-def coordinatesFromName(name):
-    # this function needs to stay outside of the class or the class needs to implement pickling
-    s = edtsSystem.from_name(name, allow_known=False)
-    if s:
-        return { "id": s.id64, "name": s.name, "uncertainty": s.uncertainty,
-                 "x": s.position.x, "y": s.position.y, "z": s.position.z }
-    else:
-        return None
+def generateCoordinates(system):
+    return system.getCoordinates()
+
+class EliteSystem():
+    def __init__(self, name, id64 = 0, x = 0, y = 0, z = 0, uncertainty = 0):
+        self.name = name
+        self.id64 = id64
+        self.x = x
+        self.y = y
+        self.z = z
+        self.uncertainty = uncertainty
+
+    def fromJSON(self, j):
+        self.id64 = j["id64"]
+        if "estimatedCoordinates" in j:
+            coordinates = j["estimatedCoordinates"]
+            self.x = coordinates["x"]
+            self.y = coordinates["y"]
+            self.z = coordinates["z"]
+            self.uncertainty = coordinates["precision"]
+
+    def getCoordinates(self):
+        if self.x == 0 and self.y == 0 and self.z == 0:
+            s = edtsSystem.from_id64(self.id64, allow_known=False)
+            if s:
+                self.x = s.position.x
+                self.y = s.position.y
+                self.z = s.position.z
+                self.uncertainty = int(s.uncertainty * DISTANCE_MULTIPLIER + .5) # round it so it matches the values from EDSM
+        return { "id": self.id64, "name": self.name, "uncertainty": self.uncertainty, "x": self.x, "y": self.y, "z": self.z }
 
 class EDSM_RSE_DB():
     def __init__(self, number_of_processes, db_host, db_port, db_name, db_user, db_password):
@@ -125,7 +149,7 @@ class EDSM_RSE_DB():
             
         print("Calculating the coordinates and adding them to the database...")
         pool = mp.Pool(processes = self.number_of_processes)
-        for count, result in enumerate(tqdm(pool.imap_unordered(coordinatesFromName, self.systemNames, chunksize=100), total=len(self.systemNames), unit=" systems")):
+        for count, result in enumerate(tqdm(pool.imap_unordered(generateCoordinates, self.systems, chunksize=100), total=len(self.systems), unit=" systems")):
             if result:
                 result["action_todo"] = 1
                 self.c.execute(sql_insert, result)
@@ -163,8 +187,7 @@ class EDSM_RSE_DB():
         if not os.path.exists(self.jsonFile):
             print("Downloading systemsWithoutCoordinates.json from EDSM...")
             r = requests.get("https://www.edsm.net/dump/systemsWithoutCoordinates.json", stream=True)
-            with tqdm(unit="B", unit_scale=True) as pbar,\
-                 open(self.jsonFile, "wb") as f:
+            with tqdm(unit="B", unit_scale=True) as pbar, open(self.jsonFile, "wb") as f:
                 for data in r.iter_content(chunk_size=32*1024):
                     if data:
                         f.write(data)
@@ -188,7 +211,7 @@ class EDSM_RSE_DB():
                         systemSet.add(line.strip().lower())
 
         print("Reading json file...")
-        self.systemNames = list()
+        self.systems = list()
         useRegex = True if len(permitSectorsList) > 0 else False
 
         with open(self.jsonFile) as file:
@@ -205,51 +228,53 @@ class EDSM_RSE_DB():
                         if isinstance(id64, list):
                             logger.warning("Possible dupe systems", id64)
                         else:
-                            self.systemNames.append(name)
+                            system = EliteSystem(name)
+                            system.fromJSON(entry)
+                            self.systems.append(system)
                     else:
-                        self.systemNames.append(name)
+                        system = EliteSystem(name)
+                        system.fromJSON(entry)
+                        self.systems.append(system)
                 pbar.close()
 
     def applyDelta(self):
         print("Applying changes only...")
         print("Reading database...")
         self.openDatabase()
-        dbSystems = dict()
-        self.c.execute("SELECT name, id FROM systems WHERE (action_todo & 1)=1 AND deleted_at IS NULL")
+        dbSystems = set()
+        self.c.execute("SELECT id FROM systems WHERE (action_todo & 1)=1 AND deleted_at IS NULL")
         rows = self.c.fetchall()
 
         print("Searching for changes...")
-        total = len(rows) + len(self.systemNames)
+        total = len(rows) + len(self.systems)
         pbar = tqdm(total=total, unit=" steps")
 
         for row in rows:
-            dbSystems.setdefault(row[0], row[1])
+            dbSystems.add(row[0])
             pbar.update(1)
 
         removed = 0
         needsAdding = list()
 
-        for systemName in self.systemNames:
-            if systemName in dbSystems:
+        for system in self.systems:
+            if system.id64 in dbSystems:
                 # system is already present, do nothing
                 # only dupe PG name is stored in systems table
-                dbSystems.pop(systemName, 0)
+                dbSystems.remove(system.id64)
             else:
-                result = coordinatesFromName(systemName)
-                if result:
-                    needsAdding.append(result)
+                needsAdding.append(system.getCoordinates())
             pbar.update(1)
         pbar.close()
 
-        print("Deleting {0} entries and adding {1} new ones...".format(len(dbSystems.keys()), len(needsAdding)))
-        if len(dbSystems.values()) > 0:
+        print("Deleting {0} entries and adding {1} new ones...".format(len(dbSystems), len(needsAdding)))
+        if len(dbSystems) > 0:
             sql1 = " ".join([
                 "UPDATE systems SET action_todo = (action_todo & %(acx)s)",  # delete 2^0
                 "WHERE id = %(id64)s;",
                 "UPDATE systems SET deleted_at = current_timestamp",
                 "WHERE action_todo = 0 AND id = %(id64)s;",
             ])
-            for id64 in tqdm(dbSystems.values(), desc="Deleting..."):
+            for id64 in tqdm(dbSystems, desc="Deleting..."):
                 self.c.execute(sql1, { "acx": ACTIONX-1, "id64": id64 })
             self.conn.commit()
     
