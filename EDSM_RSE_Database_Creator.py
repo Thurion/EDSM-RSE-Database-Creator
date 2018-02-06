@@ -48,7 +48,7 @@ def coordinatesFromName(name):
 
 class EDSM_RSE_DB():
     def __init__(self, number_of_processes, db_host, db_port, db_name, db_user, db_password):
-        self.jsonFile =  os.path.join(os.getcwd(), "systemsWithoutCoordinates.json")
+        self.jsonFile = os.path.join(os.getcwd(), "systemsWithoutCoordinates.json")
         self.permitSectorsFile = os.path.join(os.getcwd(), "permit_sectors.txt")
         self.systemFilterFile = os.path.join(os.getcwd(), "system_filter.txt")
         self.number_of_processes = number_of_processes
@@ -327,13 +327,11 @@ def main():
     edsmRse.checkAndDownloadJSON()
     edsmRse.applyFilters()
 
-    currentTime = int(time.time())
     if not edsmRse.isDatabasePresentAndValid():
         edsmRse.createDatabase()
     else:
         edsmRse.applyDelta()
     #edsmRse.scan_Navbeacons() TODO: needs fixing in the google doc
-    edsmRse.conn.commit()
     print("All done :)")
 
 if __name__ == "__main__":
