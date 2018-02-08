@@ -245,32 +245,33 @@ class EDSM_RSE_DB():
                     if len(line) > 2: # ignore empty lines
                         systemSet.add(line.strip().lower())
 
-        print("Reading json file...")
         self.systems = list()
         useRegex = True if len(permitSectorsList) > 0 else False
 
         with open(self.jsonFile) as file:
-            j = json.load(file)
+            print("Reading json file...")
             print("Applying filters...")
-            with tqdm(total=len(j), unit=" systems") as pbar:
-                for entry in j:
-                    pbar.update(1)
-                    name = entry["name"]
-                    if useRegex and permitLocked.match(name) or name.lower() in systemSet:
-                        continue # filter out system
-                    if not pgnames.is_pg_system_name(name):
-                        id64 = id64data.known_systems.get(name.lower(), None)
-                        if isinstance(id64, list):
-                            logging.warning("Possible dupe systems", id64)
-                        else:
-                            system = EliteSystem(name)
-                            system.fromJSON(entry)
-                            self.systems.append(system)
+            for linejson in tqdm(file, unit=" systems"):
+                linejson = linejson.strip(" [],\n\r")
+                if linejson:
+                    entry = json.loads(linejson)
+                else:
+                    continue
+                name = entry["name"]
+                if useRegex and permitLocked.match(name) or name.lower() in systemSet:
+                    continue # filter out system
+                if not pgnames.is_pg_system_name(name):
+                    id64 = id64data.known_systems.get(name.lower(), None)
+                    if isinstance(id64, list):
+                        logging.warning("Possible dupe systems", id64)
                     else:
                         system = EliteSystem(name)
                         system.fromJSON(entry)
                         self.systems.append(system)
-                pbar.close()
+                else:
+                    system = EliteSystem(name)
+                    system.fromJSON(entry)
+                    self.systems.append(system)
 
     def applyDelta(self):
         print("Applying changes only...")
@@ -331,7 +332,6 @@ class EDSM_RSE_DB():
             for edSystem in tqdm(needsAdding, desc="Adding..."):
                 edSystem["action_todo"] = 1
                 self.c.execute(sql1, edSystem)
-            self.conn.commit()
         self.conn.commit()
 
     def scan_Navbeacons(self):
