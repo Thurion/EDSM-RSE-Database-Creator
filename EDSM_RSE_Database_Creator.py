@@ -375,7 +375,7 @@ def main():
         j = json.load(jf)
         rse = j["edsm_rse"]
         db = j["database"]
-        edsmRse = EDSM_RSE_DB(rse["number_of_processes"], rse["number_of_processes"], rse["number_of_simultatnous_inserts"], 
+        edsmRse = EDSM_RSE_DB(rse["number_of_processes"], rse["number_of_simultatnous_inserts"], rse["size_of_queue"],
                     db["host"], db["port"], db["dbname"], db["user"], db["password"])
 
     edsmRse.checkAndDownloadJSON()
